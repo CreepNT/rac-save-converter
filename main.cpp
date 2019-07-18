@@ -19,10 +19,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <iostream>
 #include <string>
 #include <filesystem>
-
 #define DEBUG
-
-
 void readFileBytes(const char* name, std::vector<char>& data)
 {
 	std::ifstream ifs(name, std::ios::binary | std::ios::ate);
@@ -35,84 +32,94 @@ void readFileBytes(const char* name, std::vector<char>& data)
 	ifs.close();
 }
 
+
 int main(int argc, char* argv[])
 {
-	double versionnum = 0.001;
-	if (argc > 1)
-	{
-
+	double versionnum = 0.002;//Increment this each time. Thanks.
+	if (argc > 1){
 		std::string argv1 = argv[1];
-		bool autoname = 1;
+		std::string filename;
+		bool argv1isfile = 1;
+		int gameversion = 0;
+
 #ifdef  DEBUG
 		std::cout << argv1 << std::endl;
-#endif //  DEBUG
-		if ((argv1 == "-h") || (argv1 == "-help") || (argv1 == "--help") || (argv1 == "--h"))//Just to be sure you don't miss it :D
+#endif //DEBUG
+
+		if ((argv1 == "-h") || (argv1 == "-help") || (argv1 == "--help") || (argv1 == "--h"))//Undocumented arguments for lightheads.
 		{//Testing for help arguement, if it is present, displays help
 			std::cout << "PlayStation Save Converter by Jackblue & CreepNT - Version " << versionnum << std::endl;
 			std::cout << "Copyright (C) 2019 Jackblue & CreepNT - Provided AS IS, WITHOUT ANY WARRANTY !" << std::endl;
 			std::cout << "Used to convert save files between PS3 and Vita.\n" << std::endl;
-			std::cout << "Syntax : \n" << argv[0] << " file-to-convert [optional-output-file]\n" << std::endl;
-			std::cout << "If no name is provided, the converted file's name will be the same with an added \"CONVERTED-\" prefix." << std::endl;
-			std::cout << "In the case the file to convert is named USR-DATA, then the output is named RCX_SAVEDATA_Y.bin." << std::endl;
-			//TODO : implement autonaming for Vita=>PS3
-			std::cout << "Autonaming can be disabled by passing -na (NoAuto) as the first argument." << std::endl;
-			std::cout << "If a custom output file name has been provided, autonaming is automatically ignored." << std::endl;
-			return 0;
+			std::cout << "Syntax : \n" << argv[0] << " <-rc1/-rc2/-rc3> file-to-convert [optional-output-file]\n" << std::endl;
+			std::cout << "If no output name is provided, the converted file's name will be the same with an added \"CONVERTED-\" prefix." << std::endl;
+			std::cout << "If no game version argument is passed, will try to detect it in the file name." << std::endl;
+			std::cout << "The auto-detect ONLY works if the file has RCx in its name, with x being the number of the game." << std::endl;
+			std::cout << "(i.e. when converting from Vita). If the program can't find, then it will stop." << std::endl;
+			return 0;}
+
+
+		if ((argv1.find("RC1") != std::string::npos) || (argv1 == "-rc1")) {//Trying to find the game version.
+			gameversion = 1;
 		}
-		std::string filename;
-		if (argv1 == "-na")
-		{//Testing for NoAuto naming argument
+		else if ((argv1.find("RC2") != std::string::npos) || (argv1 == "-rc2")) {
+			gameversion = 2;
+		}
+		else if ((argv1.find("RC3") != std::string::npos) || (argv1 == "-rc3")) {
+			gameversion = 3;
+		}
+		if ((argv1 == "-rc1") || (argv1 =="-rc2") || (argv1 == "-rc3")) {//If first argument is not a filename then we need to shift the index of argv[]
+			argv1isfile = 0;
+		}
+
+		if (argv1isfile) {
+			filename = argv1;
+		}
+		else {
 			filename = argv[2];
-			autoname = 0;
 		}
-		else
-		{
-			filename = argv1;//No correct arguments have been passed, assuming there is none
-		}
+
 		if (std::filesystem::exists(filename))
-		{
-			std::vector<char> data;
+		{	std::vector<char> data;
 			readFileBytes(filename.c_str(), data);
-
 			std::vector<char> finalsave(data.size());
-			//Convert endianness by swapping bytes of 4-bytes blocks
-			//This method SEEMS to work for RC1, needs to be tested for RC2, and DOESN'T work for RC3
-			for (int block = 0; block < data.size() / 4; ++block)
-			{
-				int pos = block * 4;
 
-				finalsave[pos + 3] = data[pos + 0];
-				finalsave[pos + 2] = data[pos + 1];
-				finalsave[pos + 1] = data[pos + 2];
-				finalsave[pos + 0] = data[pos + 3];
+			if (gameversion == 0) {//No version, no CONversion :^)
+				std::cout << "Could not identify the game the save is from. Please specify with the -rc1/-rc2/-rc3 argument." << std::endl;
+				return 0;
 			}
-			std::string outputpath = "CONVERTED-" + filename; //If no other test suceed, name will not be changed. This makes code prettier.
-			if ((argc > 2 && autoname == 1) || (argc > 3 && autoname == 0)) {
-				switch (autoname)
-				{
-				case 1:
-					outputpath = argv[2];//No arguments were passed so second arg should be output path.
-					break;
-				case 0:
-					outputpath = argv[3]; //Surprisingly, -na argument has been passed.  Output path should be third argument.
-					break;
+			
+			if (gameversion == 1) {//Convert "endianness" by swapping bytes of 4-bytes blocks
+				//This method SEEMS to work for RC1, needs to be tested for RC2, and DOESN'T work for RC3
+				for (int block = 0; block < data.size() / 4; ++block){
+					int pos = block * 4;
+
+					finalsave[pos + 3] = data[pos + 0];
+					finalsave[pos + 2] = data[pos + 1];
+					finalsave[pos + 1] = data[pos + 2];
+					finalsave[pos + 0] = data[pos + 3];
 				}
 			}
-			else
-			{//Autonaming tests
-				if (filename == "USR-DATA" && autoname == 1) {
-					outputpath = "RCx_SAVEDATA_y.bin";
-				}
-				//TODO : Implement Vita --> PS3 autonaming
+			if (gameversion == 2) {//To be implemented
+					std::cout << "RC2 conversion is not implemented yet. Exiting..." << std::endl;
+					return 0;
 			}
+			if (gameversion == 3) {//To be implemented
+				std::cout << "RC3 conversion is not implemented yet. Exiting..." << std::endl;
+				return 0;
+			}
+			std::string outputpath = "CONVERTED-" + filename; //If no other test succeed, name will not be changed.
+		    //TODO : Implement the naming process
 
+
+			
 			std::ofstream outfile(outputpath, std::ios::out | std::ios::binary);
 			outfile.write(finalsave.data(), finalsave.size());
 			outfile.close();
 
 			std::cout << "Save successfuly converted !" << std::endl;
 			std::cout << "Outputed to " << outputpath << std::endl;
-		}
+			}
 		else {
 			std::cout << "Error: Specified file (" << filename << ") doesn't exists !" << std::endl;
 			std::cout << "Use \"-h\" argument to get help." << std::endl;
